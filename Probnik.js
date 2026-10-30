@@ -612,6 +612,7 @@
             };
 
         } else if (tabId === '4') {
+            // ИСПРАВЛЕННАЯ ВКЛАДКА 4 С РАБОЧИМ И ПЛАВНЫМ ФИЛЬТРОМ ОЧКОВ
             container.innerHTML = `
                 <div style="padding: 10px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #fff8eb;">
                     <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; background: #f5e8cd; padding: 6px; border: 1px solid #c5a059; border-radius: 3px; flex-wrap: wrap; position: relative;">
@@ -627,8 +628,8 @@
                         <select id="hub_filter_type" style="font-size: 10px; padding: 3px; border: 1px solid #c5a059; border-radius: 2px; background: #fff; max-width: 100px;">
                             <option value="">Все типы</option>
                         </select>
-                        <input type="text" id="hub_filter_min_pts" placeholder="Мин. очки" style="font-size: 10px; padding: 3px; width: 65px; border: 1px solid #c5a059; border-radius: 2px;">
-                        <input type="text" id="hub_filter_max_pts" placeholder="Макс. очки" style="font-size: 10px; padding: 3px; width: 65px; border: 1px solid #c5a059; border-radius: 2px;">
+                        <input type="text" id="hub_filter_min_pts" placeholder="Мин. очки" value="${localStorage.getItem('tw_hub_filter_min_pts') || ''}" style="font-size: 10px; padding: 3px; width: 65px; border: 1px solid #c5a059; border-radius: 2px; background: #fff;">
+                        <input type="text" id="hub_filter_max_pts" placeholder="Макс. очки" value="${localStorage.getItem('tw_hub_filter_max_pts') || ''}" style="font-size: 10px; padding: 3px; width: 65px; border: 1px solid #c5a059; border-radius: 2px; background: #fff;">
                         
                         <div style="position: relative; display: inline-block;">
                             <button id="hub_db_btn_save_cfg" style="background: #e2c08e; border: 1px solid #7d510f; font-weight: bold; padding: 3px 6px; cursor: pointer; border-radius: 2px; font-size: 10px; color: #5b3511;">Сохранить ▼</button>
@@ -719,16 +720,26 @@
                 let selTribe = document.getElementById('hub_filter_tribe').value;
                 let selQuad = document.getElementById('hub_filter_quad').value;
                 let selType = document.getElementById('hub_filter_type').value;
-                let minPts = parseInt(document.getElementById('hub_filter_min_pts').value) || 0;
-                let maxPts = parseInt(document.getElementById('hub_filter_max_pts').value) || 9999999;
+
+                let minInputVal = document.getElementById('hub_filter_min_pts').value.trim();
+                let maxInputVal = document.getElementById('hub_filter_max_pts').value.trim();
+                
+                localStorage.setItem('tw_hub_filter_min_pts', minInputVal);
+                localStorage.setItem('tw_hub_filter_max_pts', maxInputVal);
+
+                let minPts = minInputVal === '' ? null : parseInt(minInputVal, 10);
+                let maxPts = maxInputVal === '' ? null : parseInt(maxInputVal, 10);
 
                 let filtered = db.filter(item => {
-                    let ptsVal = parseInt(String(item.points).replace(/,/g, '')) || 0;
+                    let ptsVal = parseInt(String(item.points || '0').replace(/\D/g, ''), 10) || 0;
                     if (selPlayer && item.player !== selPlayer) return false;
                     if (selTribe && item.tribe !== selTribe) return false;
                     if (selQuad && getQuadrant(item.coord) !== selQuad) return false;
                     if (selType && getVillageType(item.name) !== selType) return false;
-                    if (ptsVal < minPts || ptsVal > maxPts) return false;
+                    
+                    if (minPts !== null && !isNaN(minPts) && ptsVal < minPts) return false;
+                    if (maxPts !== null && !isNaN(maxPts) && ptsVal > maxPts) return false;
+                    
                     return true;
                 });
 
@@ -768,10 +779,17 @@
 
             renderDBTable();
 
-            ['hub_filter_player', 'hub_filter_tribe', 'hub_filter_quad', 'hub_filter_type', 'hub_filter_min_pts', 'hub_filter_max_pts'].forEach(id => {
+            ['hub_filter_player', 'hub_filter_tribe', 'hub_filter_quad', 'hub_filter_type'].forEach(id => {
                 let el = document.getElementById(id);
-                if (el) el.oninput = renderDBTable;
                 if (el) el.onchange = renderDBTable;
+            });
+
+            ['hub_filter_min_pts', 'hub_filter_max_pts'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) {
+                    el.oninput = renderDBTable;
+                    el.onkeyup = renderDBTable;
+                }
             });
 
             let chkAll = document.getElementById('hub_db_chk_all');
@@ -984,7 +1002,6 @@
                 </div>
             `;
 
-            // СУПЕР-БЛОКИРОВЩИК РЕКЛАМЫ (С защитой от CORS и сканированием DOM)
             let iframe = document.getElementById('twstats-frame');
             if (iframe) {
                 let killAdsInsideFrame = function() {
@@ -992,7 +1009,6 @@
                         let frameDoc = iframe.contentDocument || iframe.contentWindow.document;
                         if (!frameDoc) return;
 
-                        // 1. Внедряем жесткие стили для скрытия элементов рекламы
                         if (!frameDoc.getElementById('super-ad-blocker-style')) {
                             let style = frameDoc.createElement('style');
                             style.id = 'super-ad-blocker-style';
@@ -1019,7 +1035,6 @@
                             frameDoc.head.appendChild(style);
                         }
 
-                        // 2. Функция физического удаления элементов рекламы из дерева документа
                         let purgeAds = () => {
                             let adSelectors = [
                                 'iframe[src*="googlesyndication"]',
@@ -1036,7 +1051,6 @@
 
                         purgeAds();
 
-                        // 3. Динамический наблюдатель (MutationObserver) для отлова рекламы, которая подгружается с задержкой
                         if (!frameDoc._adObserverInitialized) {
                             frameDoc._adObserverInitialized = true;
                             let observer = new MutationObserver((mutations) => {
@@ -1047,16 +1061,12 @@
                                 subtree: true
                             });
                         }
-                    } catch (e) {
-                        // Если браузер блокирует доступ из-за строгой политики безопасности (CORS), 
-                        // используем резервный метод обхода через очистку по таймауту или перезагрузку ссылки (если применимо)
-                    }
+                    } catch (e) {}
                 };
 
                 iframe.onload = killAdsInsideFrame;
-                // Дополнительный цикл проверки на случай асинхронной подгрузки скриптов рекламы TWStats
                 let intervalTimer = setInterval(killAdsInsideFrame, 1000);
-                setTimeout(() => clearInterval(intervalTimer), 15000); // Очищаем интервал через 15 секунд после открытия вкладки
+                setTimeout(() => clearInterval(intervalTimer), 15000);
             }
         }
     }
@@ -1078,4 +1088,3 @@
     loadTabContent('1');
 })();
 void(0);
-
